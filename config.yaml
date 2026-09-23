@@ -1,0 +1,27 @@
+# Jev Whale Classifier Configuration
+
+whale:
+  eth:
+    min_value_eth: 100          # Minimum ETH to flag as whale tx
+    min_value_usd: 250000       # Minimum USD value
+  btc:
+    min_value_btc: 50           # Minimum BTC to flag as whale tx
+    min_value_usd: 250000       # Minimum USD value
+
+jev:
+  endpoint: "https://openrouter.ai/api/alpha/decisions"
+  model: "typesafe/jev-1.13"
+
+scanner:
+  poll_interval_seconds: 60     # How often to poll in monitor mode
+  max_tx_per_scan: 50           # Max transactions per API call
+  eth_rpc_endpoints:            # Public RPC endpoints (free, no key)
+    - "https://cloudflare-eth.com"
+    - "https://rpc.ankr.com/eth"
+    - "https://eth.llamarpc.com"
+    - "https://ethereum-rpc.publicnode.com"
+
+logging:
+  log_dir: "logs"
+  whale_log: "whale_transactions.jsonl"
+  classification_log: "classifications.jsonl"
