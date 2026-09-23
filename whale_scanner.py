@@ -28,28 +28,72 @@ def anonymize_address(addr: str) -> str:
 
 
 # Known exchange addresses (subset for detection)
-KNOWN_EXCHANGES = {
+# ETH addresses — lowercased for case-insensitive matching
+KNOWN_EXCHANGES_ETH = {
     # Binance
     "0x28c6c06298d514db089934071355e5743bf21d60": "Binance",
     "0x21a31ee1afc51d94c2efccaa2092ad1028285549": "Binance",
     "0xdfd5293d8e347dfe59e90efd55b2956a1343963d": "Binance",
     "0x56eddb7aa87536c09ccc2793473599fd21a8b17f": "Binance",
+    "0xf977814e90da44bfa03b6295a0616a897441acec": "Binance",
+    "0x8894e0a0c962cb723c1ef8a1b2c6d40afc0e9c47": "Binance",
     # Coinbase
     "0x71660c4005ba85c37ccec55d0c4493e66fe775d3": "Coinbase",
     "0x503828976d22510aad0201ac7ec88293211d23da": "Coinbase",
     "0xddfabcdc4d8ffc6d5beaf154f18b778f892a0740": "Coinbase",
     "0x3cd751e6b0078be393132286c442345e68ff0aab": "Coinbase",
+    "0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43": "Coinbase",
+    "0x5c3e0e7f6dfc7c9698b0f01c0e23f0e4fca8b3b2": "Coinbase Prime",
     # Kraken
     "0x2910543af39aba0cd09dbb2d50200b3e800a63d2": "Kraken",
     "0x0a869d79a7052c7f1b55a8ebabbea3420f0d1e13": "Kraken",
+    "0x267be1c1d684f78cb4f6a176c4911b741e4ffdc0": "Kraken",
+    # FTX (legacy — addresses that may still hold funds)
+    "0x2faf487a4414fe77e2327f0bf4ae2a264a776ad2": "FTX",
+    "0xc098b2a3aa256d2140208c3de6543aaef5cd3a94": "FTX",
+    "0x83c209d1e523febc72b7a2d41d6bea3a5e0e1f8c": "FTX",
     # Bitfinex
     "0x1151314c646ce4e0efd76d1af4760ae66a9fe30f": "Bitfinex",
     "0x742d35cc6634c0532925a3b844bc9e7595f2bd3e": "Bitfinex",
     # OKX
     "0x6cc5f688a315f3dc28a7781717a9a798a59fda7b": "OKX",
+    "0x236f9f97e0e62388479bf9e5ba4889e46b0273c3": "OKX",
     # Gemini
     "0xd24400ae8bfebb18ca49be86258a3c749cf46853": "Gemini",
+    "0x6fc82a5fe25a5cdb58bc74600a40a69c065263f8": "Gemini",
+    # Huobi / HTX
+    "0xab5c66752a9e8167967685f1450532fb96d5d24f": "HTX",
+    "0x6748f50f686bfbca6fe8ad62b22228b87f31ff2b": "HTX",
+    # Gate.io
+    "0x0d0707963952f2fba59dd06f2b425ace40b492fe": "Gate.io",
+    # KuCoin
+    "0xd6216fc19db775df9774a6e33526131da7d19a2c": "KuCoin",
+    # Bybit
+    "0xf89d7b9c864f589bbf53a82105107622b35eaa40": "Bybit",
 }
+
+# BTC addresses — well-known exchange deposit/withdrawal addresses
+# These are representative hot-wallet addresses (BTC addresses change frequently)
+KNOWN_EXCHANGES_BTC = {
+    # Binance
+    "34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo": "Binance",
+    "3JZq4atUahhuA9rLhXLMhhTo133J9rF97j": "Binance",
+    "1NDyJtNTjmwk5xPNhjgAMu4HDHigtobu1s": "Binance",
+    "bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h": "Binance",
+    # Coinbase
+    "3Kzh9qAqVWQhEsfQz7zEQL1EuSx5tyNLNS": "Coinbase",
+    "3FHNBLobJnbCTFTVakh5TXmEneyf5PT61B": "Coinbase",
+    "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh": "Coinbase",
+    # Kraken
+    "3FupZp77ySr7jwoLYEJ9mwzJpvoNBXsBnE": "Kraken",
+    "bc1qkw8c5rvnzs8qp0w2y9345cv9wd80gasm2spgh3": "Kraken",
+    # Bitfinex
+    "3JZq4atUahhuA9rLhXLMhhTo133J9rF97j": "Bitfinex",
+    "bc1qgdjqv0av3q56jvd82tkdjpy7gdpyv5dqv75kn4": "Bitfinex",
+}
+
+# Merge for unified lookup (ETH and BTC address spaces don't overlap)
+KNOWN_EXCHANGES = {**KNOWN_EXCHANGES_ETH, **KNOWN_EXCHANGES_BTC}
 
 
 def detect_exchange(addr: str) -> str | None:
@@ -58,30 +102,41 @@ def detect_exchange(addr: str) -> str | None:
     return KNOWN_EXCHANGES.get(addr.lower())
 
 
-def get_eth_price() -> float:
-    """Get current ETH price in USD."""
+_price_cache = {"prices": None, "ts": 0}
+
+
+def _fetch_prices() -> dict:
+    """Fetch ETH and BTC prices from CoinGecko with 60s caching."""
+    now = time.time()
+    if _price_cache["prices"] and now - _price_cache["ts"] < 60:
+        return _price_cache["prices"]
     try:
         r = requests.get(
             "https://api.coingecko.com/api/v3/simple/price",
-            params={"ids": "ethereum", "vs_currencies": "usd"},
+            params={"ids": "ethereum,bitcoin", "vs_currencies": "usd"},
             timeout=10,
         )
-        return r.json()["ethereum"]["usd"]
+        r.raise_for_status()
+        data = r.json()
+        prices = {
+            "eth": data["ethereum"]["usd"],
+            "btc": data["bitcoin"]["usd"],
+        }
+        _price_cache["prices"] = prices
+        _price_cache["ts"] = now
+        return prices
     except Exception:
-        return 3500.0
+        return {"eth": 3500.0, "btc": 100000.0}
+
+
+def get_eth_price() -> float:
+    """Get current ETH price in USD."""
+    return _fetch_prices()["eth"]
 
 
 def get_btc_price() -> float:
     """Get current BTC price in USD."""
-    try:
-        r = requests.get(
-            "https://api.coingecko.com/api/v3/simple/price",
-            params={"ids": "bitcoin", "vs_currencies": "usd"},
-            timeout=10,
-        )
-        return r.json()["bitcoin"]["usd"]
-    except Exception:
-        return 100000.0
+    return _fetch_prices()["btc"]
 
 
 # Public Ethereum RPC endpoints (free, no key)
@@ -197,8 +252,8 @@ def scan_btc_whales(min_value_btc: float = 50) -> list[dict]:
                     "to_anonymized": anonymize_address(str(to_addr)),
                     "amount": round(value_btc, 8),
                     "usd_value": round(value_btc * btc_price, 2),
-                    "exchange_from": None,
-                    "exchange_to": None,
+                    "exchange_from": detect_exchange(str(from_addr)),
+                    "exchange_to": detect_exchange(str(to_addr)),
                     "block": tx.get("block_height", 0),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "input_count": len(tx.get("inputs", [])),

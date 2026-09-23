@@ -95,8 +95,8 @@ def classify_whale_tx(tx_data: dict) -> dict:
         r.raise_for_status()
         data = r.json()
 
-        # Parse Jev response
-        decisions = data.get("decisions", {})
+        # Parse Jev response — newer API uses "answers", older uses "decisions"
+        decisions = data.get("answers") or data.get("decisions") or {}
         intent = decisions.get("q0", {}).get("choice", "unknown")
         bearish = decisions.get("q1", {}).get("noul", False)
         severity_score = decisions.get("q2", {}).get("score", 0)
